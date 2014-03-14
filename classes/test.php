@@ -3,6 +3,7 @@
 namespace mageekguy\atoum;
 
 use
+    mageekguy\atoum,
 	mageekguy\atoum\test,
 	mageekguy\atoum\mock,
 	mageekguy\atoum\asserter,
@@ -60,7 +61,7 @@ abstract class test implements observable, \countable
 	private $path = '';
 	private $class = '';
 	private $classNamespace = '';
-	private $observers = array();
+	private $observers = null;
 	private $tags = array();
 	private $phpVersions = array();
 	private $mandatoryExtensions = array();
@@ -76,6 +77,7 @@ abstract class test implements observable, \countable
 	private $xdebugConfig = null;
 	private $codeCoverage = false;
 	private $classHasNotVoidMethods = false;
+    private $extensions = null;
 
 	private static $namespace = null;
 	private static $methodPrefix = null;
@@ -98,6 +100,9 @@ abstract class test implements observable, \countable
 			->setAsserterCallManager()
 			->enableCodeCoverage()
 		;
+
+        $this->observers = new \splObjectStorage();
+        $this->extensions = new \splObjectStorage();
 
 		$class = ($reflectionClassFactory ? $reflectionClassFactory($this) : new \reflectionClass($this));
 
@@ -892,10 +897,22 @@ abstract class test implements observable, \countable
 
 	public function addObserver(observer $observer)
 	{
-		$this->observers[] = $observer;
+		$this->observers->attach($observer);
 
 		return $this;
 	}
+
+    public function removeObserver(atoum\observer $observer)
+    {
+        $this->observers->detach($observer);
+
+        return $this;
+    }
+
+    public function getObservers()
+    {
+        return iterator_to_array($this->observers);
+    }
 
 	public function callObservers($event)
 	{
@@ -1706,6 +1723,55 @@ abstract class test implements observable, \countable
 
 		return $this;
 	}
+
+    public function getExtensions()
+    {
+        return iterator_to_array($this->extensions);
+    }
+
+    public function removeExtension(atoum\extension $extension)
+    {
+        $this->extensions->detach($extension);
+
+        return $this->removeObserver($extension);;
+    }
+
+    public function removeExtensions()
+    {
+        foreach ($this->extensions as $extension)
+        {
+            $this->removeObserver($extension);
+        }
+
+        $this->extensions = new \splObjectStorage();
+
+        return $this;
+    }
+
+
+    public function addExtension(atoum\extension $extension)
+    {
+        if ($this->extensions->contains($extension) === false)
+        {
+            $extension->setTest($this);
+
+            $this->extensions->attach($extension);
+
+            $this->addObserver($extension);
+        }
+
+        return $this;
+    }
+
+    public function addExtensions(\traversable $extensions)
+    {
+        foreach ($extensions as $extension)
+        {
+            $this->addExtension($extension);
+        }
+
+        return $this;
+    }
 
 	private static function cleanNamespace($namespace)
 	{
